@@ -1,0 +1,172 @@
+blueprint:
+  name: IKEA Styrbar - Custom Left/Right Actions
+  description: Control multiple Light/Switch Entities with customizable left/right actions using the IKEA Styrbar remote via Zigbee2MQTT.
+  domain: automation
+  input:
+    switch_remote:
+      name: Styrbar switch remote
+      description: Choose IKEA Styrbar switch remote
+      selector:
+        device:
+          integration: mqtt
+          manufacturer: IKEA
+          model: STYRBAR remote control
+          multiple: false
+    targets:
+      name: Light/Switch
+      description: Choose one or more Light/Switch Entities you want to control
+      selector:
+        entity:
+          filter:
+          - domain:
+            - light
+            - switch
+          multiple: true
+    selected_target:
+      name: Selected Light/Switch Input Number Helper
+      description: (Optional) Input Number Helper to retain the last selected target (for multiple targets)
+      selector:
+        entity:
+          multiple: false
+          filter:
+          - domain:
+            - input_number
+          reorder: false
+          optional: true
+    left_press_action:
+      name: Left button press action
+      description: Action to run when the left button is pressed
+      selector:
+        action: {}
+    right_press_action:
+      name: Right button press action
+      description: Action to run when the right button is pressed
+      selector:
+        action: {}
+    force_brightness:
+      name: Set brightness for every On command
+      selector:
+        boolean: {}
+      default: false
+    brightness_pct:
+      name: Brightness (%) when force brightness is enabled
+      selector:
+        number:
+          min: 0.0
+          max: 100.0
+          step: 1.0
+      default: 50
+    repeat_delay:
+      name: Delay for brightness adjustment (ms)
+      selector:
+        number:
+          min: 0.0
+          max: 1000.0
+          step: 1.0
+      default: 150
+    repeat_count:
+      name: Maximum brightness adjustment iterations
+      selector:
+        number:
+          min: 0.0
+          max: 100.0
+          step: 1.0
+      default: 20
+    brightness_step_pct:
+      name: Brightness step per iteration (%)
+      selector:
+        number:
+          min: 0.0
+          max: 100.0
+          step: 1.0
+      default: 20
+    smooth_dimming:
+      name: Enable smooth dimming globally
+      selector:
+        boolean: {}
+      default: true
+    smooth_dimming_targets:
+      name: Entities using smooth dimming (optional)
+      selector:
+        entity:
+          filter:
+          - domain:
+            - light
+            - switch
+          multiple: true
+      default: []
+    smooth_step_pct:
+      name: Smooth dimming step (%) per iteration
+      selector:
+        number:
+          min: 1.0
+          max: 100.0
+          step: 1.0
+      default: 5
+    dimming_transition:
+      name: Transition time for smooth dimming (s)
+      selector:
+        number:
+          min: 0.0
+          max: 2.0
+          step: 0.1
+      default: 0.5
+    prevent_turn_off_when_dimming:
+      name: Prevent turning off when dimming
+      selector:
+        boolean: {}
+      default: true
+    dimming_off_threshold_pct:
+      name: Minimum brightness (%) when preventing turn off
+      selector:
+        number:
+          min: 0.0
+          max: 100.0
+          step: 1.0
+      default: 1
+
+trigger:
+  - id: 'on'
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: 'on'
+  - id: 'off'
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: 'off'
+  - id: brightness_move_up
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: brightness_move_up
+  - id: brightness_move_down
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: brightness_move_down
+  - id: brightness_stop
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: brightness_stop
+  - id: arrow_left_click
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: arrow_left_click
+  - id: arrow_right_click
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: arrow_right_click
+
+action:
+  - variables:
+      targets: !input targets
+      selected_target: !input selected_target
+      brightness_step_pct: !input brightness_step_pct
+      smooth_dimming: !input smooth_dimming
+      smooth_dimming_targets: !input smooth_dimming_targets
+      smooth_step_pct: !input smo
