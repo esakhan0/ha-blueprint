@@ -40,7 +40,6 @@ blueprint:
           multiple: false
           reorder: false
 
-    # Custom simple actions
     left_press_action:
       name: Left button press action
       description: Action to run when LEFT button is pressed
@@ -213,11 +212,15 @@ action:
   - variables:
       targets: !input targets
       selected_target: !input selected_target
+      force_brightness: !input force_brightness
+      brightness_pct: !input brightness_pct
       brightness_step_pct: !input brightness_step_pct
+
       smooth_dimming: !input smooth_dimming
       smooth_dimming_targets: !input smooth_dimming_targets
       smooth_step_pct: !input smooth_step_pct
       dimming_transition: !input dimming_transition
+
       prevent_turn_off_when_dimming: !input prevent_turn_off_when_dimming
       dimming_off_threshold_pct: !input dimming_off_threshold_pct
 
@@ -241,13 +244,13 @@ action:
           - condition: template
             value_template: "{{ target_entity_domain == 'light' }}"
           - condition: template
-            value_template: "{{ ( !input force_brightness ) }}"
+            value_template: "{{ force_brightness }}"
         sequence:
-          - service: "{{ target_entity_domain }}.turn_on"
+          - service: light.turn_on
             target:
               entity_id: "{{ target_entity_id }}"
             data:
-              brightness_pct: !input brightness_pct
+              brightness_pct: "{{ brightness_pct }}"
 
       - alias: "on"
         conditions:
