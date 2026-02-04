@@ -1,0 +1,470 @@
+blueprint:
+  name: IKEA Styrbar - Multi target + Left/Right single+double (fixed)
+  description: >
+    Control multiple light/switch targets with IKEA STYRBAR via Zigbee2MQTT.
+    ON/OFF + dim up/down control the selected target.
+    LEFT/RIGHT support virtual single and double press actions you define.
+  domain: automation
+
+  input:
+    switch_remote:
+      name: Styrbar switch remote
+      selector:
+        device:
+          integration: mqtt
+          manufacturer: IKEA
+          model: STYRBAR remote control
+          multiple: false
+
+    targets:
+      name: Light/Switch targets
+      selector:
+        entity:
+          multiple: true
+          reorder: false
+          filter:
+            - domain:
+                - light
+                - switch
+
+    selected_target:
+      name: Selected target index (Input Number)
+      description: 0 = first item in targets list
+      selector:
+        entity:
+          multiple: false
+          reorder: false
+          filter:
+            - domain:
+                - input_number
+
+    # Helpers to store last press time (required for double press)
+    left_last_press_helper:
+      name: Left last press helper (Input Number)
+      description: Stores last LEFT press timestamp
+      selector:
+        entity:
+          multiple: false
+          reorder: false
+          filter:
+            - domain:
+                - input_number
+
+    right_last_press_helper:
+      name: Right last press helper (Input Number)
+      description: Stores last RIGHT press timestamp
+      selector:
+        entity:
+          multiple: false
+          reorder: false
+          filter:
+            - domain:
+                - input_number
+
+    double_press_window_ms:
+      name: Double press window (ms)
+      description: Two presses within this time = double press
+      selector:
+        number:
+          min: 150
+          max: 1500
+          step: 50
+          mode: slider
+      default: 400
+
+    left_press_action:
+      name: Left SINGLE press action
+      default: []
+      selector:
+        action: {}
+
+    left_double_press_action:
+      name: Left DOUBLE press action
+      default: []
+      selector:
+        action: {}
+
+    right_press_action:
+      name: Right SINGLE press action
+      default: []
+      selector:
+        action: {}
+
+    right_double_press_action:
+      name: Right DOUBLE press action
+      default: []
+      selector:
+        action: {}
+
+    force_brightness:
+      name: Force brightness on ON
+      selector:
+        boolean: {}
+      default: false
+
+    brightness_pct:
+      name: Forced brightness (%)
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: slider
+      default: 50
+
+    repeat_delay:
+      name: Dim repeat delay (ms)
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 1
+          mode: slider
+      default: 150
+
+    repeat_count:
+      name: Dim repeat iterations
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: slider
+      default: 20
+
+    brightness_step_pct:
+      name: Instant dimming step (%)
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: slider
+      default: 20
+
+    smooth_dimming:
+      name: Enable smooth dimming
+      selector:
+        boolean: {}
+      default: true
+
+    smooth_dimming_targets:
+      name: Entities using smooth dimming (optional)
+      description: If empty, applies to all light targets.
+      selector:
+        entity:
+          multiple: true
+          reorder: false
+          filter:
+            - domain:
+                - light
+      default: []
+
+    smooth_step_pct:
+      name: Smooth dimming step (%)
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: slider
+      default: 5
+
+    dimming_transition:
+      name: Smooth dimming transition (seconds)
+      selector:
+        number:
+          min: 0
+          max: 2
+          step: 0.1
+      default: 0.5
+
+    prevent_turn_off_when_dimming:
+      name: Prevent turning off when dimming down
+      selector:
+        boolean: {}
+      default: true
+
+    dimming_off_threshold_pct:
+      name: Minimum brightness (%) when preventing turn off
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: slider
+      default: 1
+
+mode: restart
+
+trigger:
+  - id: "on"
+    platform: device
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: "on"
+  - id: "off"
+    platform: device
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: "off"
+  - id: "brightness_move_up"
+    platform: device
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: "brightness_move_up"
+  - id: "brightness_move_down"
+    platform: device
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: "brightness_move_down"
+  - id: "brightness_stop"
+    platform: device
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: "brightness_stop"
+  - id: "arrow_left_click"
+    platform: device
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: "arrow_left_click"
+  - id: "arrow_right_click"
+    platform: device
+    device_id: !input switch_remote
+    domain: mqtt
+    type: action
+    subtype: "arrow_right_click"
+
+action:
+  - variables:
+      targets: !input targets
+      selected_target: !input selected_target
+
+      left_last_press_helper: !input left_last_press_helper
+      right_last_press_helper: !input right_last_press_helper
+      double_press_window_ms: !input double_press_window_ms
+
+      force_brightness: !input force_brightness
+      brightness_pct: !input brightness_pct
+      brightness_step_pct: !input brightness_step_pct
+
+      smooth_dimming: !input smooth_dimming
+      smooth_targets: !input smooth_dimming_targets
+      smooth_step_pct: !input smooth_step_pct
+      dimming_transition: !input dimming_transition
+
+      prevent_off: !input prevent_turn_off_when_dimming
+      off_threshold_pct: !input dimming_off_threshold_pct
+
+      target_index: >-
+        {% set tlist = targets | list %}
+        {% set count = tlist | count | int %}
+        {% set cur = states(selected_target) | int(0) %}
+        {% if count == 0 %}0{% elif cur < 0 %}0{% elif cur >= count %}{{ count - 1 }}{% else %}{{ cur }}{% endif %}
+
+      target_entity_id: "{{ (targets | list)[target_index] }}"
+      target_domain: "{{ target_entity_id.split('.')[0] }}"
+
+      smooth_enabled: >-
+        {{ smooth_dimming and ( (smooth_targets | list | count) == 0 or target_entity_id in (smooth_targets | list) ) }}
+
+      now_ts: "{{ as_timestamp(now()) }}"
+      window_s: "{{ (double_press_window_ms | float(400)) / 1000 }}"
+
+  - choose:
+
+      # ON
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'on' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ target_domain == 'light' and force_brightness }}"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: "{{ target_entity_id }}"
+                    data:
+                      brightness_pct: "{{ brightness_pct }}"
+            default:
+              - service: "{{ target_domain }}.turn_on"
+                target:
+                  entity_id: "{{ target_entity_id }}"
+
+      # OFF
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'off' }}"
+        sequence:
+          - service: "{{ target_domain }}.turn_off"
+            target:
+              entity_id: "{{ target_entity_id }}"
+
+      # DIM UP
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'brightness_move_up' and target_domain == 'light' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ smooth_enabled }}"
+                sequence:
+                  - repeat:
+                      count: !input repeat_count
+                      sequence:
+                        - variables:
+                            cur_brightness: >-
+                              {{ (state_attr(target_entity_id, 'brightness') | int(0) * 100 / 255) | round(0) }}
+                            new_brightness: >-
+                              {{ [ (cur_brightness | int) + (smooth_step_pct | int), 100 ] | min }}
+                        - service: light.turn_on
+                          target:
+                            entity_id: "{{ target_entity_id }}"
+                          data:
+                            brightness_pct: "{{ new_brightness }}"
+                            transition: "{{ dimming_transition }}"
+                        - delay:
+                            milliseconds: !input repeat_delay
+            default:
+              - repeat:
+                  count: !input repeat_count
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: "{{ target_entity_id }}"
+                      data:
+                        brightness_step_pct: "{{ brightness_step_pct }}"
+                    - delay:
+                        milliseconds: !input repeat_delay
+
+      # DIM DOWN
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'brightness_move_down' and target_domain == 'light' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ smooth_enabled }}"
+                sequence:
+                  - repeat:
+                      count: !input repeat_count
+                      sequence:
+                        - variables:
+                            cur_brightness: >-
+                              {{ (state_attr(target_entity_id, 'brightness') | int(0) * 100 / 255) | round(0) }}
+                            off_threshold: >-
+                              {% if prevent_off %}{{ off_threshold_pct | int }}{% else %}0{% endif %}
+                            new_brightness: >-
+                              {{ [ (cur_brightness | int) - (smooth_step_pct | int), off_threshold ] | max }}
+                        - service: light.turn_on
+                          target:
+                            entity_id: "{{ target_entity_id }}"
+                          data:
+                            brightness_pct: "{{ new_brightness }}"
+                            transition: "{{ dimming_transition }}"
+                        - delay:
+                            milliseconds: !input repeat_delay
+            default:
+              - repeat:
+                  count: !input repeat_count
+                  sequence:
+                    - variables:
+                        cur_brightness: >-
+                          {{ (state_attr(target_entity_id, 'brightness') | int(0) * 100 / 255) | round(0) }}
+                        off_threshold: >-
+                          {% if prevent_off %}{{ off_threshold_pct | int }}{% else %}0{% endif %}
+                        new_brightness: >-
+                          {{ [ (cur_brightness | int) - (brightness_step_pct | int), off_threshold ] | max }}
+                    - service: light.turn_on
+                      target:
+                        entity_id: "{{ target_entity_id }}"
+                      data:
+                        brightness_pct: "{{ new_brightness }}"
+                    - delay:
+                        milliseconds: !input repeat_delay
+
+      # STOP - do nothing
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'brightness_stop' }}"
+        sequence: []
+
+      # LEFT CLICK -> virtual single/double
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'arrow_left_click' }}"
+        sequence:
+          - variables:
+              prev: "{{ states(left_last_press_helper) | float(0) }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ prev > 0 and (now_ts | float) - prev <= (window_s | float) }}"
+                sequence:
+                  - service: input_number.set_value
+                    target:
+                      entity_id: "{{ left_last_press_helper }}"
+                    data:
+                      value: 0
+                  - sequence: !input left_double_press_action
+            default:
+              - service: input_number.set_value
+                target:
+                  entity_id: "{{ left_last_press_helper }}"
+                data:
+                  value: "{{ now_ts }}"
+              - delay:
+                  milliseconds: !input double_press_window_ms
+              - condition: template
+                value_template: "{{ states(left_last_press_helper) | float(0) == (now_ts | float) }}"
+              - service: input_number.set_value
+                target:
+                  entity_id: "{{ left_last_press_helper }}"
+                data:
+                  value: 0
+              - sequence: !input left_press_action
+
+      # RIGHT CLICK -> virtual single/double
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'arrow_right_click' }}"
+        sequence:
+          - variables:
+              prev: "{{ states(right_last_press_helper) | float(0) }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ prev > 0 and (now_ts | float) - prev <= (window_s | float) }}"
+                sequence:
+                  - service: input_number.set_value
+                    target:
+                      entity_id: "{{ right_last_press_helper }}"
+                    data:
+                      value: 0
+                  - sequence: !input right_double_press_action
+            default:
+              - service: input_number.set_value
+                target:
+                  entity_id: "{{ right_last_press_helper }}"
+                data:
+                  value: "{{ now_ts }}"
+              - delay:
+                  milliseconds: !input double_press_window_ms
+              - condition: template
+                value_template: "{{ states(right_last_press_helper) | float(0) == (now_ts | float) }}"
+              - service: input_number.set_value
+                target:
+                  entity_id: "{{ right_last_press_helper }}"
+                data:
+                  value: 0
+              - sequence: !input right_press_action
