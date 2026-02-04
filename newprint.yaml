@@ -1,9 +1,9 @@
 blueprint:
-  name: IKEA Styrbar - Multi target + Left/Right single+double (fixed)
+  name: IKEA Styrbar - Multi target + Left/Right single+double (FULL FIX)
   description: >
     Control multiple light/switch targets with IKEA STYRBAR via Zigbee2MQTT.
     ON/OFF + dim up/down control the selected target.
-    LEFT/RIGHT support virtual single and double press actions you define.
+    LEFT/RIGHT clicks support virtual SINGLE and DOUBLE press actions.
   domain: automation
 
   input:
@@ -38,10 +38,10 @@ blueprint:
             - domain:
                 - input_number
 
-    # Helpers to store last press time (required for double press)
+    # Helpers to store last press time in ms (required for double press)
     left_last_press_helper:
       name: Left last press helper (Input Number)
-      description: Stores last LEFT press timestamp
+      description: Stores last LEFT press timestamp in milliseconds
       selector:
         entity:
           multiple: false
@@ -52,7 +52,7 @@ blueprint:
 
     right_last_press_helper:
       name: Right last press helper (Input Number)
-      description: Stores last RIGHT press timestamp
+      description: Stores last RIGHT press timestamp in milliseconds
       selector:
         entity:
           multiple: false
@@ -204,36 +204,42 @@ trigger:
     domain: mqtt
     type: action
     subtype: "on"
+
   - id: "off"
     platform: device
     device_id: !input switch_remote
     domain: mqtt
     type: action
     subtype: "off"
+
   - id: "brightness_move_up"
     platform: device
     device_id: !input switch_remote
     domain: mqtt
     type: action
     subtype: "brightness_move_up"
+
   - id: "brightness_move_down"
     platform: device
     device_id: !input switch_remote
     domain: mqtt
     type: action
     subtype: "brightness_move_down"
+
   - id: "brightness_stop"
     platform: device
     device_id: !input switch_remote
     domain: mqtt
     type: action
     subtype: "brightness_stop"
+
   - id: "arrow_left_click"
     platform: device
     device_id: !input switch_remote
     domain: mqtt
     type: action
     subtype: "arrow_left_click"
+
   - id: "arrow_right_click"
     platform: device
     device_id: !input switch_remote
@@ -248,7 +254,7 @@ action:
 
       left_last_press_helper: !input left_last_press_helper
       right_last_press_helper: !input right_last_press_helper
-      double_press_window_ms: !input double_press_window_ms
+      window_ms: !input double_press_window_ms
 
       force_brightness: !input force_brightness
       brightness_pct: !input brightness_pct
@@ -274,8 +280,7 @@ action:
       smooth_enabled: >-
         {{ smooth_dimming and ( (smooth_targets | list | count) == 0 or target_entity_id in (smooth_targets | list) ) }}
 
-      now_ts: "{{ as_timestamp(now()) }}"
-      window_s: "{{ (double_press_window_ms | float(400)) / 1000 }}"
+      now_ms: "{{ (as_timestamp(now()) * 1000) | int }}"
 
   - choose:
 
@@ -399,17 +404,17 @@ action:
             value_template: "{{ trigger.id == 'brightness_stop' }}"
         sequence: []
 
-      # LEFT CLICK -> virtual single/double
+      # LEFT CLICK -> single/double
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'arrow_left_click' }}"
         sequence:
           - variables:
-              prev: "{{ states(left_last_press_helper) | float(0) }}"
+              prev_ms: "{{ states(left_last_press_helper) | int(0) }}"
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ prev > 0 and (now_ts | float) - prev <= (window_s | float) }}"
+                    value_template: "{{ prev_ms > 0 and (now_ms - prev_ms) <= (window_ms | int) }}"
                 sequence:
                   - service: input_number.set_value
                     target:
@@ -422,11 +427,11 @@ action:
                 target:
                   entity_id: "{{ left_last_press_helper }}"
                 data:
-                  value: "{{ now_ts }}"
+                  value: "{{ now_ms }}"
               - delay:
                   milliseconds: !input double_press_window_ms
               - condition: template
-                value_template: "{{ states(left_last_press_helper) | float(0) == (now_ts | float) }}"
+                value_template: "{{ states(left_last_press_helper) | int(0) == now_ms }}"
               - service: input_number.set_value
                 target:
                   entity_id: "{{ left_last_press_helper }}"
@@ -434,17 +439,17 @@ action:
                   value: 0
               - sequence: !input left_press_action
 
-      # RIGHT CLICK -> virtual single/double
+      # RIGHT CLICK -> single/double
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'arrow_right_click' }}"
         sequence:
           - variables:
-              prev: "{{ states(right_last_press_helper) | float(0) }}"
+              prev_ms: "{{ states(right_last_press_helper) | int(0) }}"
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ prev > 0 and (now_ts | float) - prev <= (window_s | float) }}"
+                    value_template: "{{ prev_ms > 0 and (now_ms - prev_ms) <= (window_ms | int) }}"
                 sequence:
                   - service: input_number.set_value
                     target:
@@ -457,11 +462,11 @@ action:
                 target:
                   entity_id: "{{ right_last_press_helper }}"
                 data:
-                  value: "{{ now_ts }}"
+                  value: "{{ now_ms }}"
               - delay:
                   milliseconds: !input double_press_window_ms
               - condition: template
-                value_template: "{{ states(right_last_press_helper) | float(0) == (now_ts | float) }}"
+                value_template: "{{ states(right_last_press_helper) | int(0) == now_ms }}"
               - service: input_number.set_value
                 target:
                   entity_id: "{{ right_last_press_helper }}"
