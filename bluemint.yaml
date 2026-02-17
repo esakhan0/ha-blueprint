@@ -1,0 +1,28 @@
+blueprint:
+  name: Alexa Blind Reverse (Matter Fix)
+  description: Reverse blind direction for Alexa via Matter bridge
+  domain: automation
+  input:
+    alexa_slider:
+      name: Alexa virtual blind (input_number)
+      selector:
+        entity:
+          domain: input_number
+    real_blind:
+      name: Real blind entity
+      selector:
+        entity:
+          domain: cover
+
+trigger:
+  - platform: state
+    entity_id: !input alexa_slider
+
+action:
+  - service: cover.set_cover_position
+    target:
+      entity_id: !input real_blind
+    data:
+      position: >
+        {{ 100 - states(!input alexa_slider)|int }}
+mode: restart
